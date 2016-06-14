@@ -1,0 +1,10 @@
+[OFFSET]
+y_offset = -16
+x_offset = -170
+z_offset = 1006
+
+[GAIN]
+z_gain = 259
+x_gain = -313
+y_gain = -306
+
