@@ -13,7 +13,7 @@ Usage
 ====================
 Example code for 
 
-- Calibration for offset and sensitivity (cross axis calibration), please follow instructin in Terminal
+- Calibration for offset and sensitivity (cross axis calibration), please follow instruction in Terminal
 - Reading g and pitch:
 
 .. code-block:: bash
