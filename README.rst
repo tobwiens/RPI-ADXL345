@@ -1,4 +1,4 @@
-ADXL345-RPI-PY
+RPI-ADXL345
 ====================
 Python library to interface ADXL345 Accelerometer 
 (already test with Raspberry Pi2)
@@ -11,7 +11,13 @@ smbus
 
 Usage
 ====================
+Example code for 
+
+- Calibration for offset and sensitivity (cross axis calibration), please follow instructin in Terminal
+- Reading g and pitch:
+
 .. code-block:: bash
+
 	import adxl345
 	import time
 
