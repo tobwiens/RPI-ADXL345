@@ -25,8 +25,8 @@ import time
 import configparser
 import math
 
-
 CALIB_FILE = 'adxl345_calibration.txt'
+
 
 class Regis(object):
     # Registers follow DataSheet
@@ -72,11 +72,20 @@ class DataRate(object):
     R_50 = 0b1001
     R_25 = 0b1000
 
+
 class Range:
     G_2 = 0x00
     G_4 = 0x01
     G_8 = 0x02
     G_16 = 0x03
+
+
+class FIFO:
+    BYPASS = 0x00
+    FIFO = 0x40
+    STREAM = 0x80
+    TRIGGER = 0xC0
+
 
 class ADXL345(object):
     def __init__(self, i2c_port=1, address=0x53):
@@ -87,7 +96,7 @@ class ADXL345(object):
         self.x = 0
         self.y = 0
         self.z = 0
-		
+
         self.x_offset = 0
         self.y_offset = 0
         self.z_offset = 0
@@ -95,6 +104,32 @@ class ADXL345(object):
         self.x_gain = 1
         self.y_gain = 1
         self.z_gain = 1
+
+    def set_fifo_mode(self, fifo_mode=FIFO.BYPASS):
+        register_state = self.bus.read_byte_data(self.i2c_address, Regis.FIFO_CTL) & 0x3F  # (00111111)
+        self.bus.write_byte_data(self.i2c_address, Regis.FIFO_CTL, register_state | fifo_mode)
+
+        print("FIFO_CTL register state :"+str(self.bus.read_byte_data(self.i2c_address, Regis.FIFO_CTL))) # (00111111)
+
+    def enable_watermark_interrupt(self):
+        register_state = self.bus.read_byte_data(self.i2c_address, Regis.INT_ENABLE)
+        self.bus.write_byte_data(self.i2c_address, Regis.INT_ENABLE, register_state | 0x02 )  # 00000010
+
+        print("Watermark interrupt enabled, interrupt register: "+ str(self.bus.read_byte_data(self.i2c_address, Regis.INT_ENABLE)))
+
+    def disable_watermark_interrupt(self):
+        register_state = self.bus.read_byte_data(self.i2c_address, Regis.INT_ENABLE) & 0xFD  # 111111101
+        self.bus.write_byte_data(self.i2c_address, Regis.FIFO_CTL, register_state | 0x02 )  # 00000010
+
+    def set_trigger_amount(self, trigger_sample_amount=5):
+        register_state = self.bus.read_byte_data(self.i2c_address, Regis.FIFO_CTL) & 0xE0  # 11100000
+        self.bus.write_byte_data(self.i2c_address, Regis.FIFO_CTL, register_state | trigger_sample_amount)
+
+        print("FIFO_CTL register state :" + str(
+            self.bus.read_byte_data(self.i2c_address, Regis.FIFO_CTL)))  # (00111111)
+
+    def get_trigger_bit(self) -> bool:
+        return self.bus.read_byte_data(self.i2c_address, Regis.FIFO_CTL) & 0x20  # 00100000
 
     def set_data_rate(self, data_rate=DataRate.R_100):
         self.bus.write_byte_data(self.i2c_address, Regis.BW_RATE, data_rate)
@@ -132,13 +167,13 @@ class ADXL345(object):
 
     def get_an_axis(self, axis=Regis.DATAX0):
         byte_axis = self.bus.read_i2c_block_data(self.i2c_address, axis, 2)
-        return self.convert_axis_data_raw(byte_axis[0], byte_axis[1])*self.scale_factor
+        return self.convert_axis_data_raw(byte_axis[0], byte_axis[1]) * self.scale_factor
 
     def get_3_axis(self):
         byte_3_axis = self.bus.read_i2c_block_data(self.i2c_address, Regis.DATAX0, 6)
-        x = self.convert_axis_data_raw(byte_3_axis[0], byte_3_axis[1])*self.scale_factor
-        y = self.convert_axis_data_raw(byte_3_axis[2], byte_3_axis[3])*self.scale_factor
-        z = self.convert_axis_data_raw(byte_3_axis[4], byte_3_axis[5])*self.scale_factor
+        x = self.convert_axis_data_raw(byte_3_axis[0], byte_3_axis[1]) * self.scale_factor
+        y = self.convert_axis_data_raw(byte_3_axis[2], byte_3_axis[3]) * self.scale_factor
+        z = self.convert_axis_data_raw(byte_3_axis[4], byte_3_axis[5]) * self.scale_factor
 
         return x, y, z
 
@@ -147,22 +182,22 @@ class ADXL345(object):
         value = self.convert_axis_data_raw(byte_axis[0], byte_axis[1])
 
         if axis == Regis.DATAX0:
-            value = (value - self.x_offset)/self.x_gain
+            value = (value - self.x_offset) / self.x_gain
         elif axis == Regis.DATAY0:
-            value = (value - self.y_offset)/self.y_gain
+            value = (value - self.y_offset) / self.y_gain
         else:
-            value = (value - self.z_offset)/self.z_gain
+            value = (value - self.z_offset) / self.z_gain
 
         return value
 
     def get_3_axis_adjusted(self):
         byte_3_axis = self.bus.read_i2c_block_data(self.i2c_address, Regis.DATAX0, 6)
-        self.x = (self.convert_axis_data_raw(byte_3_axis[0], byte_3_axis[1]) - self.x_offset)/self.x_gain
-        self.y = (self.convert_axis_data_raw(byte_3_axis[2], byte_3_axis[3]) - self.y_offset)/self.y_gain
-        self.z = (self.convert_axis_data_raw(byte_3_axis[4], byte_3_axis[5]) - self.z_offset)/self.z_gain
+        self.x = (self.convert_axis_data_raw(byte_3_axis[0], byte_3_axis[1]) - self.x_offset) / self.x_gain
+        self.y = (self.convert_axis_data_raw(byte_3_axis[2], byte_3_axis[3]) - self.y_offset) / self.y_gain
+        self.z = (self.convert_axis_data_raw(byte_3_axis[4], byte_3_axis[5]) - self.z_offset) / self.z_gain
 
         return self.x, self.y, self.z
-        
+
     def get_pitch(self):
         return math.degrees(math.atan2(self.x, math.hypot(self.y, self.z)))
 
@@ -204,17 +239,17 @@ class ADXL345(object):
                 collected_value.append(value)
                 time.sleep(0.1)
 
-            avg_value.append(sum(collected_value)/len(collected_value))
+            avg_value.append(sum(collected_value) / len(collected_value))
 
-        self.z_offset = int(round((avg_value[0] + avg_value[1])*0.5, 0))
-        self.z_gain = int(round((avg_value[0] - avg_value[1])*0.5, 0))
+        self.z_offset = int(round((avg_value[0] + avg_value[1]) * 0.5, 0))
+        self.z_gain = int(round((avg_value[0] - avg_value[1]) * 0.5, 0))
 
         self.y_offset = int(round((avg_value[2] + avg_value[3]) * 0.5, 0))
         self.y_gain = int(round((avg_value[2] - avg_value[3]) * 0.5, 0))
 
         self.x_offset = int(round((avg_value[4] + avg_value[5]) * 0.5, 0))
         self.x_gain = int(round((avg_value[4] - avg_value[5]) * 0.5, 0))
-        
+
         self.save_calib_value()
 
     def save_calib_value(self):
